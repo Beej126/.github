@@ -1,16 +1,19 @@
-name: "Build Go Winres Executable"
-description: "Injects versioning metadata and builds a Windows executable."
+name: "Build Go Executable with Winres"
+description: "Applies Windows resource versioning and builds a Go executable into dist/"
 
 inputs:
-  output_binary:
-    description: "Name of the compiled binary"
-    required: true
-  semver:
-    description: "Semantic version tag (e.g. 1.0.1)"
+  binary_name:
+    description: "Name of the output binary (without .exe extension)"
     required: true
   win_file_version:
-    description: "Windows file version format (e.g. 1.0.1.0)"
-    required: true
+    description: "4-part Windows file version (e.g. 1.0.1.0)"
+    required: false
+    default: "1.0.0.0"
+
+outputs:
+  binary_path:
+    description: "Path to the built executable"
+    value: ${{ steps.build.outputs.binary_path }}
 
 runs:
   using: "composite"
@@ -18,7 +21,8 @@ runs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22'
+        go-version-file: "go.mod"
+        cache: true
 
     - name: Install go-winres
       shell: bash
@@ -36,6 +40,10 @@ runs:
         fi
 
     - name: Cross-Compile Windows Binary
+      id: build
       shell: bash
       run: |
-        env GOOS=windows GOARCH=amd64 go build -v -o "${{ inputs.output_binary }}"
+        mkdir -p dist
+        OUT_PATH="dist/${{ inputs.binary_name }}.exe"
+        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o "$OUT_PATH"
+        echo "binary_path=$OUT_PATH" >> "$GITHUB_OUTPUT"
