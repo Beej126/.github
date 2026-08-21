@@ -27,9 +27,13 @@ runs:
     - name: Apply Windows Resource Versioning
       shell: bash
       run: |
-        go-winres make \
-          --file-version="${{ inputs.win_file_version }}" \
-          --product-version="v${{ inputs.semver }}"
+        if [ -f "winres.json" ]; then
+          go-winres make --in winres.json --product-version "${{ inputs.win_file_version }}" --file-version "${{ inputs.win_file_version }}"
+        elif [ -f "winres/winres.json" ]; then
+          go-winres make --product-version "${{ inputs.win_file_version }}" --file-version "${{ inputs.win_file_version }}"
+        else
+          echo "::notice::No winres.json found. Skipping Windows resource embedding."
+        fi
 
     - name: Cross-Compile Windows Binary
       shell: bash

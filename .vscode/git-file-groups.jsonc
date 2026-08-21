@@ -2,7 +2,7 @@
   "default_group": "uncategorized",
   "groups": [],
   "assignments": {
-    "actions/calculate-version/action.yml": "uncategorized"
+    "actions/build-go-winres/action.yml": "uncategorized"
   },
   "auto_sync": true
 }
