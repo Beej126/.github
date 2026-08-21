@@ -1,5 +1,5 @@
-name: "Publish GitHub Release"
-description: "Generates changelog and publishes a GitHub Release with build artifacts"
+name: "Generate GitHub Release"
+description: "Generates changelog and creates a GitHub Release with build artifacts"
 
 inputs:
   tag_name:
@@ -21,6 +21,7 @@ runs:
       uses: mikepenz/release-changelog-builder-action@v5
       with:
         token: ${{ inputs.github_token }}
+        toTag: ${{ inputs.tag_name }}
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
