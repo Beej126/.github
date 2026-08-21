@@ -26,7 +26,12 @@ runs:
 
         # Check 2: Verify git tags were fetched (fetch-tags: true)
         tag_count=$(git tag | wc -l)
-        remote_tags="$(git ls-remote --tags origin 2>/dev/null || true)"
+        
+        # Safely check remote tags only if origin remote is configured
+        remote_tags=""
+        if git remote get-url origin >/dev/null 2>&1; then
+          remote_tags="$(git ls-remote --tags origin 2>/dev/null || true)"
+        fi
 
         # If it's not a shallow repo but zero tags are visible despite remote tags existing, fetch-tags was omitted
         if [ "$tag_count" -eq 0 ] && [ -n "$remote_tags" ]; then
@@ -59,7 +64,7 @@ runs:
       shell: bash
       run: |
         # Get latest tag, fallback to 1.0.0 if no tags exist
-        last_tag=$(git describe --abbrev=0 --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "1.0.0")
+        last_tag="$(git describe --abbrev=0 --tags $(git rev-list --tags --max-count=1 2>/dev/null) 2>/dev/null || echo "1.0.0")"
 
         # Strip leading 'v' if present
         clean_release="${last_tag#v}"
