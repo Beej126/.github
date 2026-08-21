@@ -13,61 +13,73 @@ runs:
   using: "composite"
   steps:
     - name: Validate Git Checkout Configuration
-      shell: pwsh
+      shell: bash
       run: |
-        $hasError = $false
+        has_error=false
 
         # Check 1: Verify full git history was fetched (fetch-depth: 0)
-        $isShallow = "$(git rev-parse --is-shallow-repository 2>$null)"
-        if ($isShallow -eq "true") {
-          Write-Host "::error::[GIT CHECKOUT ERROR] Shallow repository detected!"
-          $hasError = $true
-        }
+        is_shallow="$(git rev-parse --is-shallow-repository 2>/dev/null || echo "false")"
+        if [ "$is_shallow" = "true" ]; then
+          echo "::error::[GIT CHECKOUT ERROR] Shallow repository detected!"
+          has_error=true
+        fi
 
         # Check 2: Verify git tags were fetched (fetch-tags: true)
-        git fetch --dry-run --tags 2>&1 | Out-Null
-        $tagsExistInRepo = (git tag).Count -gt 0
-        $hasLocalGitRef = "$(git rev-parse HEAD 2>$null)"
+        tag_count=$(git tag | wc -l)
+        remote_tags="$(git ls-remote --tags origin 2>/dev/null || true)"
 
         # If it's not a shallow repo but zero tags are visible despite remote tags existing, fetch-tags was omitted
-        $remoteTags = "$(git ls-remote --tags origin 2>$null)"
-        if (-not $tagsExistInRepo -and $remoteTags) {
-          Write-Host "::error::[GIT CHECKOUT ERROR] Remote tags exist, but no local tags were found!"
-          $hasError = $true
-        }
+        if [ "$tag_count" -eq 0 ] && [ -n "$remote_tags" ]; then
+          echo "::error::[GIT CHECKOUT ERROR] Remote tags exist, but no local tags were found!"
+          has_error=true
+        fi
 
         # If validation fails, print exact YAML block fix and terminate pipeline
-        if ($hasError) {
-          Write-Host "`n=================================================================================="
-          Write-Host "  MISSING REQUIRED CHECKOUT CONFIGURATION IN PROJECT WORKFLOW"
-          Write-Host "=================================================================================="
-          Write-Host "Please update your actions/checkout step in your project workflow file to match:"
-          Write-Host ""
-          Write-Host "    - uses: actions/checkout@v4"
-          Write-Host "      with:"
-          Write-Host "        fetch-depth: 0"
-          Write-Host "        fetch-tags: true"
-          Write-Host ""
-          Write-Host "==================================================================================`n"
+        if [ "$has_error" = "true" ]; then
+          echo ""
+          echo "=================================================================================="
+          echo "  MISSING REQUIRED CHECKOUT CONFIGURATION IN PROJECT WORKFLOW"
+          echo "=================================================================================="
+          echo "Please update your actions/checkout step in your project workflow file to match:"
+          echo ""
+          echo "    - uses: actions/checkout@v4"
+          echo "      with:"
+          echo "        fetch-depth: 0"
+          echo "        fetch-tags: true"
+          echo ""
+          echo "=================================================================================="
+          echo ""
           exit 1
-        }
+        fi
 
-        Write-Host "SUCCESS: Git checkout configuration validated (full depth and tags present)."
+        echo "SUCCESS: Git checkout configuration validated (full depth and tags present)."
 
     - name: Calculate Version
       id: calc
-      shell: pwsh
+      shell: bash
       run: |
-        $lastRelease = "$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=0 --max-count=1) 2>$null)"
-        if (-not $lastRelease) { $lastRelease = "1.0.0" }
+        # Get latest tag, fallback to 1.0.0 if no tags exist
+        last_tag=$(git describe --abbrev=0 --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "1.0.0")
 
-        $cleanRelease = $lastRelease.TrimStart('v')
-        $parts = $cleanRelease.Split('.')
-        $patch = [int]$parts[2] + 1
+        # Strip leading 'v' if present
+        clean_release="${last_tag#v}"
 
-        $newSemVer = "$($parts[0]).$($parts[1]).$patch"
-        $winVer = "$($newSemVer).0"
+        # Parse semver parts
+        major=$(echo "$clean_release" | cut -d'.' -f1)
+        minor=$(echo "$clean_release" | cut -d'.' -f2)
+        patch=$(echo "$clean_release" | cut -d'.' -f3)
 
-        Write-Output "new_tag=v$($newSemVer)" >> $Env:GITHUB_OUTPUT
-        Write-Output "semver=$($newSemVer)" >> $Env:GITHUB_OUTPUT
-        Write-Output "win_file_version=$($winVer)" >> $Env:GITHUB_OUTPUT
+        # Fallbacks if cut fails to find parts
+        major=${major:-1}
+        minor=${minor:-0}
+        patch=${patch:-0}
+
+        # Increment patch version
+        new_patch=$((patch + 1))
+
+        new_semver="${major}.${minor}.${new_patch}"
+        win_ver="${new_semver}.0"
+
+        echo "new_tag=v${new_semver}" >> "$GITHUB_OUTPUT"
+        echo "semver=${new_semver}" >> "$GITHUB_OUTPUT"
+        echo "win_file_version=${win_ver}" >> "$GITHUB_OUTPUT"

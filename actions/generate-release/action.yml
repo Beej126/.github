@@ -23,14 +23,17 @@ runs:
         outputFile: notes.md
 
     - name: Create GitHub Release
-      shell: pwsh
+      shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}
       run: |
-        $artifacts = "${{ inputs.artifacts }}"
-        if ($artifacts) {
-          gh release create ${{ inputs.tag_name }} $artifacts.Split(" ") --notes-file notes.md
-        } else {
-          gh release create ${{ inputs.tag_name }} --notes-file notes.md
-        }
+        artifacts_str="${{ inputs.artifacts }}"
+
+        if [ -n "$artifacts_str" ]; then
+          # Read space-separated artifact string into a bash array
+          read -r -a artifact_args <<< "$artifacts_str"
+          gh release create "${{ inputs.tag_name }}" "${artifact_args[@]}" --notes-file notes.md
+        else
+          gh release create "${{ inputs.tag_name }}" --notes-file notes.md
+        fi
