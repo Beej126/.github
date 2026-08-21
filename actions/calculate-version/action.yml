@@ -1,0 +1,73 @@
+name: "Calculate Next Version Tag"
+description: "Queries git tags and outputs the next semver tag and Windows file version."
+
+outputs:
+  new_tag:
+    value: ${{ steps.calc.outputs.new_tag }}
+  semver:
+    value: ${{ steps.calc.outputs.semver }}
+  win_file_version:
+    value: ${{ steps.calc.outputs.win_file_version }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Validate Git Checkout Configuration
+      shell: pwsh
+      run: |
+        $hasError = $false
+
+        # Check 1: Verify full git history was fetched (fetch-depth: 0)
+        $isShallow = "$(git rev-parse --is-shallow-repository 2>$null)"
+        if ($isShallow -eq "true") {
+          Write-Host "::error::[GIT CHECKOUT ERROR] Shallow repository detected!"
+          $hasError = $true
+        }
+
+        # Check 2: Verify git tags were fetched (fetch-tags: true)
+        git fetch --dry-run --tags 2>&1 | Out-Null
+        $tagsExistInRepo = (git tag).Count -gt 0
+        $hasLocalGitRef = "$(git rev-parse HEAD 2>$null)"
+
+        # If it's not a shallow repo but zero tags are visible despite remote tags existing, fetch-tags was omitted
+        $remoteTags = "$(git ls-remote --tags origin 2>$null)"
+        if (-not $tagsExistInRepo -and $remoteTags) {
+          Write-Host "::error::[GIT CHECKOUT ERROR] Remote tags exist, but no local tags were found!"
+          $hasError = $true
+        }
+
+        # If validation fails, print exact YAML block fix and terminate pipeline
+        if ($hasError) {
+          Write-Host "`n=================================================================================="
+          Write-Host "  MISSING REQUIRED CHECKOUT CONFIGURATION IN PROJECT WORKFLOW"
+          Write-Host "=================================================================================="
+          Write-Host "Please update your actions/checkout step in your project workflow file to match:"
+          Write-Host ""
+          Write-Host "    - uses: actions/checkout@v4"
+          Write-Host "      with:"
+          Write-Host "        fetch-depth: 0"
+          Write-Host "        fetch-tags: true"
+          Write-Host ""
+          Write-Host "==================================================================================`n"
+          exit 1
+        }
+
+        Write-Host "SUCCESS: Git checkout configuration validated (full depth and tags present)."
+
+    - name: Calculate Version
+      id: calc
+      shell: pwsh
+      run: |
+        $lastRelease = "$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=0 --max-count=1) 2>$null)"
+        if (-not $lastRelease) { $lastRelease = "1.0.0" }
+
+        $cleanRelease = $lastRelease.TrimStart('v')
+        $parts = $cleanRelease.Split('.')
+        $patch = [int]$parts[2] + 1
+
+        $newSemVer = "$($parts[0]).$($parts[1]).$patch"
+        $winVer = "$($newSemVer).0"
+
+        Write-Output "new_tag=v$($newSemVer)" >> $Env:GITHUB_OUTPUT
+        Write-Output "semver=$($newSemVer)" >> $Env:GITHUB_OUTPUT
+        Write-Output "win_file_version=$($winVer)" >> $Env:GITHUB_OUTPUT

@@ -1,0 +1,36 @@
+name: "Generate Release Notes & Publish"
+description: "Builds commit-based changelog and publishes a GitHub Release with optional binaries attached."
+
+inputs:
+  tag_name:
+    description: "The release tag to create (e.g., v1.0.1)"
+    required: true
+  artifacts:
+    description: "Space-separated paths or glob patterns of build artifacts to attach"
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Generate Release Notes
+      id: releaseNotes
+      uses: mikepenz/release-changelog-builder-action@v5
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      with:
+        mode: "COMMIT"
+        outputFile: notes.md
+
+    - name: Create GitHub Release
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+      run: |
+        $artifacts = "${{ inputs.artifacts }}"
+        if ($artifacts) {
+          gh release create ${{ inputs.tag_name }} $artifacts.Split(" ") --notes-file notes.md
+        } else {
+          gh release create ${{ inputs.tag_name }} --notes-file notes.md
+        }

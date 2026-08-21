@@ -1,0 +1,10 @@
+{
+  "default_group": "uncategorized",
+  "groups": [],
+  "assignments": {
+    "actions/build-go-winres/action.yml": "uncategorized",
+    "actions/calculate-version/action.yml": "uncategorized",
+    "actions/generate-release/action.yml": "uncategorized"
+  },
+  "auto_sync": true
+}
